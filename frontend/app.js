@@ -74,8 +74,18 @@ window.addEventListener("error", (event) => {
   showError(`Unexpected error: ${event.message}`);
 });
 
+// Made-up placeholder conversation shown on first load, just so there's
+// something in the chat before you generate/type anything -- not real
+// messages from anyone.
+const DEFAULT_CHAT = [
+  { author_id: "sample-alex", author_name: "Alex", avatar: null, text: "yo is anyone free this weekend", timestamp: "2026-01-01T18:00:00.000Z" },
+  { author_id: "sample-jordan", author_name: "Jordan", avatar: null, text: "depends, what's the plan", timestamp: "2026-01-01T18:02:15.000Z" },
+  { author_id: "sample-sam", author_name: "Sam", avatar: null, text: "movie night? we haven't hung out in forever", timestamp: "2026-01-01T18:05:40.000Z" },
+  { author_id: "sample-alex", author_name: "Alex", avatar: null, text: "bet, i'm down", timestamp: "2026-01-01T18:06:02.000Z" },
+];
+
 let authors = {};
-let history = []; // {author_id, author_name, avatar, text, timestamp}
+let history = DEFAULT_CHAT.slice(); // {author_id, author_name, avatar, text, timestamp}
 
 async function loadAuthors() {
   const res = await fetch("authors.json");
