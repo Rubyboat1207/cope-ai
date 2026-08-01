@@ -13,7 +13,7 @@ const HF_BASE = "https://huggingface.co/Rubyboat/cope-ai-v3/resolve/main";
 // exists to let people try a different size/URL directly rather than
 // requiring a code change + redeploy every time.
 export const MODEL_OPTIONS = [
-  { id: "q2_k", label: "Q2_K — smallest (~1.2GB), best chance on low-memory phones", url: `${HF_BASE}/model-q2_k.gguf` },
+  { id: "q2_k", label: "Q2_K — last resort only, barely coherent (~1.2GB)", url: `${HF_BASE}/model-q2_k.gguf` },
   { id: "q3_k_m", label: "Q3_K_M — small (~1.6GB), default", url: `${HF_BASE}/model-q3_k_m.gguf` },
   { id: "q4_k_m", label: "Q4_K_M — better quality (~1.9GB), desktop recommended", url: `${HF_BASE}/model-q4_k_m.gguf` },
 ];
