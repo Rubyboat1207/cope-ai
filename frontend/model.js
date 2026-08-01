@@ -3,12 +3,35 @@
 import { Wllama } from "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.5.1/esm/index.js";
 
 const WLLAMA_WASM_URL = "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.5.1/esm/wasm/wllama.wasm";
-// Q3_K_M rather than Q4_K_M: mobile browsers hit wllama's ArrayBuffer/WASM
-// heap limits much harder than desktop (an Android phone crashed with
-// "Invalid typed array length" trying to allocate a buffer for the larger
-// Q4_K_M file), so this trades a bit of quality for a real shot at fitting
-// on phones.
-const MODEL_URL = "https://huggingface.co/Rubyboat/cope-ai-v3/resolve/main/model-q3_k_m.gguf";
+const HF_BASE = "https://huggingface.co/Rubyboat/cope-ai-v3/resolve/main";
+
+// Mobile browsers hit wllama's ArrayBuffer/WASM heap limits much harder
+// than desktop (an Android phone crashed with "Invalid typed array length"
+// on the larger Q4_K_M file), and Q3_K_M's ~1.16GB single-buffer download
+// itself failed to even fetch on real-device mobile testing for reasons
+// that didn't reproduce in any desktop/emulated test — so a model picker
+// exists to let people try a different size/URL directly rather than
+// requiring a code change + redeploy every time.
+export const MODEL_OPTIONS = [
+  { id: "q2_k", label: "Q2_K — smallest (~1.2GB), best chance on low-memory phones", url: `${HF_BASE}/model-q2_k.gguf` },
+  { id: "q3_k_m", label: "Q3_K_M — small (~1.6GB), default", url: `${HF_BASE}/model-q3_k_m.gguf` },
+  { id: "q4_k_m", label: "Q4_K_M — better quality (~1.9GB), desktop recommended", url: `${HF_BASE}/model-q4_k_m.gguf` },
+];
+const DEFAULT_MODEL_ID = "q3_k_m";
+const MODEL_CHOICE_KEY = "cope-ai-model-choice";
+
+export function getSelectedModelId() {
+  return localStorage.getItem(MODEL_CHOICE_KEY) || DEFAULT_MODEL_ID;
+}
+
+export function setSelectedModelId(id) {
+  localStorage.setItem(MODEL_CHOICE_KEY, id);
+}
+
+function getSelectedModelUrl() {
+  const id = getSelectedModelId();
+  return (MODEL_OPTIONS.find((m) => m.id === id) || MODEL_OPTIONS[0]).url;
+}
 
 const TARGET_MARKER = "\n<|next|>\n";
 const LINE_RE = /^\[([^\]]+)\]\s*([^:]+):\s*(.*)$/;
@@ -61,7 +84,7 @@ export async function loadModel(onProgress) {
     const instance = new Wllama({ default: WLLAMA_WASM_URL });
     const useGpu = instance.isSupportWebGPU ? instance.isSupportWebGPU() : false;
 
-    await instance.loadModelFromUrl(MODEL_URL, {
+    await instance.loadModelFromUrl(getSelectedModelUrl(), {
       n_gpu_layers: useGpu ? 99999 : 0,
       // matches the ~1024-token training context and halves KV-cache
       // memory vs. 2048 — every bit matters on memory-constrained mobile.

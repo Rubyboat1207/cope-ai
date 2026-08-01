@@ -329,8 +329,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1 1 140px;
   min-width: 0;
+}
+
+#quick-controls .select-group {
+  flex: 1 1 140px;
 }
 
 .select-group label {
@@ -341,7 +344,7 @@ body {
   color: var(--text-muted);
 }
 
-#quick-controls select {
+.select-group select {
   background: var(--surface-alt);
   color: var(--text);
   border: 1px solid var(--border);

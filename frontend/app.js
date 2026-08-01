@@ -1,4 +1,4 @@
-import { loadModel, generateNextMessage, isModelReady } from "./model.js";
+import { loadModel, generateNextMessage, isModelReady, MODEL_OPTIONS, getSelectedModelId, setSelectedModelId } from "./model.js";
 import { initCompatGuide, checkWebGPUSupport } from "./compat.js";
 
 const messagesEl = document.getElementById("messages");
@@ -18,6 +18,20 @@ const DEFAULT_AVATAR =
   );
 
 const clearBtn = document.getElementById("clear-btn");
+const modelSelect = document.getElementById("model-select");
+
+modelSelect.innerHTML = "";
+MODEL_OPTIONS.forEach((m) => {
+  const opt = document.createElement("option");
+  opt.value = m.id;
+  opt.textContent = m.label;
+  modelSelect.appendChild(opt);
+});
+modelSelect.value = getSelectedModelId();
+modelSelect.addEventListener("change", () => {
+  setSelectedModelId(modelSelect.value);
+  location.reload();
+});
 
 const sidebarEl = document.getElementById("sidebar");
 const sidebarScrimEl = document.getElementById("sidebar-scrim");
@@ -231,7 +245,7 @@ textInput.addEventListener("keydown", (e) => {
 });
 
 async function initModel() {
-  loadBannerEl.textContent = "Loading model in your browser (first load downloads ~1.8GB, cached after)...";
+  loadBannerEl.textContent = "Loading model in your browser (first load downloads 1-2GB, cached after)...";
   loadBannerEl.classList.remove("hidden", "error");
   setDevicePill("connecting");
   let usedGpu = true;
