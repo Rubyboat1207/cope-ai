@@ -234,6 +234,25 @@ body {
   display: none;
 }
 
+#error-banner {
+  background: #3a1c1c;
+  color: #ff9b9b;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+#error-banner.hidden {
+  display: none;
+}
+#error-banner::after {
+  content: " (tap to dismiss)";
+  opacity: 0.6;
+  font-style: italic;
+}
+
 #messages {
   flex: 1;
   overflow-y: auto;
@@ -298,12 +317,28 @@ body {
 
 #quick-controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   padding: 10px 20px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   flex-wrap: wrap;
+}
+
+.select-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.select-group label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
 }
 
 #quick-controls select {
@@ -315,7 +350,7 @@ body {
   font-size: 13px;
   font-family: var(--font-body);
   min-height: 40px;
-  flex: 1 1 140px;
+  width: 100%;
   min-width: 0;
 }
 

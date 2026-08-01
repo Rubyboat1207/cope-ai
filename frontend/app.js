@@ -3,6 +3,7 @@ import { initCompatGuide, checkWebGPUSupport } from "./compat.js";
 
 const messagesEl = document.getElementById("messages");
 const loadBannerEl = document.getElementById("load-banner");
+const errorBannerEl = document.getElementById("error-banner");
 const personaSelect = document.getElementById("persona-select");
 const respondAsSelect = document.getElementById("respond-as-select");
 const autoContinueEl = document.getElementById("auto-continue");
@@ -42,6 +43,22 @@ function setDevicePill(text, { busy = false, offline = false } = {}) {
   devicePillEl.classList.toggle("busy", busy);
   devicePillEl.classList.toggle("offline", offline);
 }
+
+function showError(message) {
+  errorBannerEl.textContent = message;
+  errorBannerEl.classList.remove("hidden");
+}
+function hideError() {
+  errorBannerEl.classList.add("hidden");
+}
+errorBannerEl.addEventListener("click", hideError);
+
+window.addEventListener("unhandledrejection", (event) => {
+  showError(`Unexpected error: ${event.reason?.message || event.reason}`);
+});
+window.addEventListener("error", (event) => {
+  showError(`Unexpected error: ${event.message}`);
+});
 
 let authors = {};
 let history = []; // {author_id, author_name, avatar, text, timestamp}
@@ -121,10 +138,10 @@ function appendMessageEl(m) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function showTyping(name) {
+function showTyping(text) {
   const row = document.createElement("div");
   row.className = "typing-row";
-  row.textContent = `${name} is typing...`;
+  row.textContent = text;
   messagesEl.appendChild(row);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return row;
@@ -143,17 +160,25 @@ async function generateNext() {
     timestamp: m.timestamp,
   }));
   const forcedAuthorName = respondAsSelect.value || null;
+  hideError();
   devicePillEl.classList.add("busy");
+
+  const typingRow = showTyping("thinking...");
   let result;
   try {
-    result = await generateNextMessage(contextMessages, authors, forcedAuthorName);
+    result = await generateNextMessage(contextMessages, authors, forcedAuthorName, ({ status, partialText }) => {
+      typingRow.textContent = partialText ? `${status} ${partialText}` : status;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+  } catch (e) {
+    typingRow.remove();
+    showError(`Generation failed: ${e.message}`);
+    autoContinueEl.checked = false;
+    return;
   } finally {
     devicePillEl.classList.remove("busy");
   }
 
-  const typingRow = showTyping(result.author_name);
-  const delayMs = Math.min(Math.max(result.gap_seconds * 50, 400), 2500);
-  await new Promise((r) => setTimeout(r, delayMs));
   typingRow.remove();
 
   const msg = {
@@ -165,6 +190,7 @@ async function generateNext() {
   };
   history.push(msg);
   appendMessageEl(msg);
+  respondAsSelect.value = "";
   return msg;
 }
 

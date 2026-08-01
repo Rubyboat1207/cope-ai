@@ -90,7 +90,7 @@ async function generateGapOnly(prompt) {
   return match ? match[1] : "+30s";
 }
 
-export async function generateNextMessage(messages, authors, forcedAuthorName = null) {
+export async function generateNextMessage(messages, authors, forcedAuthorName = null, onProgress = null) {
   if (!wllama) throw new Error("model not loaded yet");
 
   const prompt = buildPrompt(messages);
@@ -98,30 +98,51 @@ export async function generateNextMessage(messages, authors, forcedAuthorName = 
 
   if (forcedAuthorName) {
     // Step 1: let the model decide the timing, ignoring who it would pick.
+    onProgress?.({ status: "picking timing...", partialText: "" });
     gapStr = await generateGapOnly(prompt);
     authorName = forcedAuthorName;
 
     // Step 2: splice in the forced author and resume completion for the
-    // message content only.
+    // message content only, streaming so progress is visible live.
     const forcedPrefix = `[${gapStr}] ${forcedAuthorName}: `;
-    const response = await wllama.createCompletion({
+    let acc = "";
+    // wllama's resolved promise doesn't carry the text when streaming —
+    // only the onData chunks do — so accumulate it ourselves.
+    await wllama.createCompletion({
       prompt: prompt + forcedPrefix,
       max_tokens: 128,
       temperature: 0.9,
       top_p: 0.9,
       stop: ["\n"],
+      stream: true,
+      onData: (chunk) => {
+        acc += chunk.choices[0].text || "";
+        onProgress?.({ status: `${forcedAuthorName} is typing...`, partialText: acc });
+      },
     });
-    text = (response.choices[0].text || "").trim();
+    text = acc.trim();
   } else {
-    const response = await wllama.createCompletion({
+    let acc = "";
+    onProgress?.({ status: "someone is typing...", partialText: "" });
+    await wllama.createCompletion({
       prompt,
       max_tokens: 128,
       temperature: 0.9,
       top_p: 0.9,
       stop: ["\n"],
+      stream: true,
+      onData: (chunk) => {
+        acc += chunk.choices[0].text || "";
+        const partialMatch = acc.match(/^\[([^\]]+)\]\s*([^:]+):\s*([\s\S]*)$/);
+        if (partialMatch) {
+          onProgress?.({ status: `${partialMatch[2].trim()} is typing...`, partialText: partialMatch[3] });
+        } else {
+          onProgress?.({ status: "someone is typing...", partialText: "" });
+        }
+      },
     });
 
-    const line = (response.choices[0].text || "").trim();
+    const line = acc.trim();
     const match = line.match(LINE_RE);
     if (match) {
       [, gapStr, authorName, text] = match;

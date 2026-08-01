@@ -41,11 +41,18 @@
     </div>
     <div id="load-banner" class="hidden"></div>
     <div id="messages"></div>
+    <div id="error-banner" class="hidden"></div>
     <div id="quick-controls">
-      <select id="persona-select" title="Chat as"></select>
-      <select id="respond-as-select" title="Who responds next">
-        <option value="">Anyone responds</option>
-      </select>
+      <div class="select-group">
+        <label for="persona-select">Chat as</label>
+        <select id="persona-select"></select>
+      </div>
+      <div class="select-group">
+        <label for="respond-as-select">Who responds next</label>
+        <select id="respond-as-select">
+          <option value="">Anyone responds</option>
+        </select>
+      </div>
       <button id="continue-btn">Generate next message</button>
     </div>
     <div id="composer">
