@@ -3,7 +3,12 @@
 import { Wllama } from "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.5.1/esm/index.js";
 
 const WLLAMA_WASM_URL = "https://cdn.jsdelivr.net/npm/@wllama/wllama@3.5.1/esm/wasm/wllama.wasm";
-const MODEL_URL = "https://huggingface.co/Rubyboat/cope-ai-v3/resolve/main/model-q4_k_m.gguf";
+// Q3_K_M rather than Q4_K_M: mobile browsers hit wllama's ArrayBuffer/WASM
+// heap limits much harder than desktop (an Android phone crashed with
+// "Invalid typed array length" trying to allocate a buffer for the larger
+// Q4_K_M file), so this trades a bit of quality for a real shot at fitting
+// on phones.
+const MODEL_URL = "https://huggingface.co/Rubyboat/cope-ai-v3/resolve/main/model-q3_k_m.gguf";
 
 const TARGET_MARKER = "\n<|next|>\n";
 const LINE_RE = /^\[([^\]]+)\]\s*([^:]+):\s*(.*)$/;
@@ -58,7 +63,9 @@ export async function loadModel(onProgress) {
 
     await instance.loadModelFromUrl(MODEL_URL, {
       n_gpu_layers: useGpu ? 99999 : 0,
-      n_ctx: 2048,
+      // matches the ~1024-token training context and halves KV-cache
+      // memory vs. 2048 — every bit matters on memory-constrained mobile.
+      n_ctx: 1024,
       progressCallback: ({ loaded, total }) => {
         const pct = total ? Math.round((loaded / total) * 100) : 0;
         onProgress?.({ stage: useGpu ? "downloading (GPU mode)" : "downloading (CPU mode)", pct });
@@ -123,6 +130,7 @@ export async function generateNextMessage(messages, authors, forcedAuthorName = 
       max_tokens: 128,
       temperature: 0.9,
       top_p: 0.9,
+      repeat_penalty: 1.15,
       stop: ["\n"],
       stream: true,
       onData: (chunk) => {
@@ -139,6 +147,7 @@ export async function generateNextMessage(messages, authors, forcedAuthorName = 
       max_tokens: 128,
       temperature: 0.9,
       top_p: 0.9,
+      repeat_penalty: 1.15,
       stop: ["\n"],
       stream: true,
       onData: (chunk) => {
