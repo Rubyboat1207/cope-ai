@@ -38,6 +38,16 @@ export function isModelReady() {
   return wllama !== null;
 }
 
+// wllama's "stop" option only truncates the final resolved response, not
+// the individual streamed chunks — since we read text purely from onData
+// (the resolved value carries nothing useful when stream:true), we have to
+// enforce the newline stop ourselves or the model keeps rambling past the
+// first line and we accumulate multiple garbled lines together.
+function firstLine(s) {
+  const idx = s.indexOf("\n");
+  return idx === -1 ? s : s.substring(0, idx);
+}
+
 export async function loadModel(onProgress) {
   if (wllama) return;
   if (loadingPromise) return loadingPromise;
@@ -117,10 +127,10 @@ export async function generateNextMessage(messages, authors, forcedAuthorName = 
       stream: true,
       onData: (chunk) => {
         acc += chunk.choices[0].text || "";
-        onProgress?.({ status: `${forcedAuthorName} is typing...`, partialText: acc });
+        onProgress?.({ status: `${forcedAuthorName} is typing...`, partialText: firstLine(acc) });
       },
     });
-    text = acc.trim();
+    text = firstLine(acc).trim();
   } else {
     let acc = "";
     onProgress?.({ status: "someone is typing...", partialText: "" });
@@ -133,7 +143,8 @@ export async function generateNextMessage(messages, authors, forcedAuthorName = 
       stream: true,
       onData: (chunk) => {
         acc += chunk.choices[0].text || "";
-        const partialMatch = acc.match(/^\[([^\]]+)\]\s*([^:]+):\s*([\s\S]*)$/);
+        const partial = firstLine(acc);
+        const partialMatch = partial.match(/^\[([^\]]+)\]\s*([^:]+):\s*([\s\S]*)$/);
         if (partialMatch) {
           onProgress?.({ status: `${partialMatch[2].trim()} is typing...`, partialText: partialMatch[3] });
         } else {
@@ -142,7 +153,7 @@ export async function generateNextMessage(messages, authors, forcedAuthorName = 
       },
     });
 
-    const line = acc.trim();
+    const line = firstLine(acc).trim();
     const match = line.match(LINE_RE);
     if (match) {
       [, gapStr, authorName, text] = match;
