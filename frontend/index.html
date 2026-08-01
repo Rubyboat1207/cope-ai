@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>cope — on-device groupchat sim</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="sidebar-scrim"></div>
+
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <span class="channel-name"># cope</span>
+      <button id="sidebar-close-btn" aria-label="Close menu">&times;</button>
+    </div>
+    <div class="persona-picker">
+      <label for="persona-select">Chat as</label>
+      <select id="persona-select"></select>
+    </div>
+    <div class="auto-toggle">
+      <label>
+        <input type="checkbox" id="auto-continue" />
+        Auto-continue
+      </label>
+    </div>
+    <button id="continue-btn">Generate next message</button>
+    <button id="clear-btn">Clear chat</button>
+
+    <button id="compat-btn" class="link-btn">Browser & device compatibility</button>
+  </div>
+
+  <div id="main">
+    <div id="topbar">
+      <button id="hamburger-btn" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <span class="channel-name topbar-channel"># cope</span>
+      <div id="device-pill" class="device-pill" title="This model runs entirely on your device — no server involved">
+        <span class="device-pill-dot"></span>
+        <span id="device-pill-text">connecting</span>
+      </div>
+    </div>
+    <div id="load-banner" class="hidden"></div>
+    <div id="messages"></div>
+    <div id="composer">
+      <input id="text-input" type="text" placeholder="Message #cope" autocomplete="off" />
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+
+  <div id="compat-overlay" class="hidden">
+    <div id="compat-modal">
+      <div class="compat-modal-header">
+        <span>Browser &amp; device compatibility</span>
+        <button id="compat-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <p class="compat-intro">
+        This runs the AI model directly on your device using <b>WebGPU</b> —
+        no server, nothing sent over the network after the page loads. Not
+        every browser supports WebGPU yet. Find your platform below.
+      </p>
+      <div id="compat-sections"></div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

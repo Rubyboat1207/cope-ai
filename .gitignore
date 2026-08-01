@@ -1,0 +1,26 @@
+# secrets
+.env
+
+# python
+venv/
+__pycache__/
+*.pyc
+.pip-cache/
+
+# logs
+logs/
+*.log
+
+# large / generated artifacts (rebuild via the pipeline instead of committing)
+models/
+lora_out/
+gguf_out/
+llama.cpp/
+*.gguf
+*.safetensors
+
+# private data — your full raw chat log, not the static site's authors/avatars
+# (those live under frontend/ and are meant to be published as part of the site)
+/messages.jsonl
+/finetune_dataset.jsonl
+/me.json

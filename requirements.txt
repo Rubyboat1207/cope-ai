@@ -1,0 +1,22 @@
+discord.py-self>=2.0.0
+python-dotenv>=1.0.0
+
+# --- training (install torch separately: pip install torch --index-url https://download.pytorch.org/whl/rocm6.4) ---
+transformers
+accelerate
+peft
+datasets
+numpy
+
+# --- serving the chat app ---
+fastapi
+uvicorn[standard]
+aiohttp
+
+# --- GGUF conversion/quantization (used with the vendored llama.cpp/ checkout) ---
+gguf
+sentencepiece
+
+# --- dashboard.py / monitor_tui.py ---
+textual
+rich
