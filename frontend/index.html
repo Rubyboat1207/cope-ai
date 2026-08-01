@@ -17,17 +17,12 @@
       <span class="channel-name"># cope</span>
       <button id="sidebar-close-btn" aria-label="Close menu">&times;</button>
     </div>
-    <div class="persona-picker">
-      <label for="persona-select">Chat as</label>
-      <select id="persona-select"></select>
-    </div>
     <div class="auto-toggle">
       <label>
         <input type="checkbox" id="auto-continue" />
         Auto-continue
       </label>
     </div>
-    <button id="continue-btn">Generate next message</button>
     <button id="clear-btn">Clear chat</button>
 
     <button id="compat-btn" class="link-btn">Browser & device compatibility</button>
@@ -46,6 +41,13 @@
     </div>
     <div id="load-banner" class="hidden"></div>
     <div id="messages"></div>
+    <div id="quick-controls">
+      <select id="persona-select" title="Chat as"></select>
+      <select id="respond-as-select" title="Who responds next">
+        <option value="">Anyone responds</option>
+      </select>
+      <button id="continue-btn">Generate next message</button>
+    </div>
     <div id="composer">
       <input id="text-input" type="text" placeholder="Message #cope" autocomplete="off" />
       <button id="send-btn">Send</button>

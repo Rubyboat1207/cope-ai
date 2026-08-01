@@ -74,30 +74,64 @@ function buildPrompt(messages) {
   return kept.join("\n") + TARGET_MARKER;
 }
 
-export async function generateNextMessage(messages, authors) {
+// Generates just the "[gap]" part of the next line (stopping before the
+// colon), so a forced author can be spliced in without letting the model
+// pick who talks — used by generateNextMessage when forcedAuthorName is set.
+async function generateGapOnly(prompt) {
+  const response = await wllama.createCompletion({
+    prompt,
+    max_tokens: 24,
+    temperature: 0.9,
+    top_p: 0.9,
+    stop: [":"],
+  });
+  const partial = (response.choices[0].text || "").trim();
+  const match = partial.match(/^\[([^\]]+)\]/);
+  return match ? match[1] : "+30s";
+}
+
+export async function generateNextMessage(messages, authors, forcedAuthorName = null) {
   if (!wllama) throw new Error("model not loaded yet");
 
   const prompt = buildPrompt(messages);
-  const response = await wllama.createCompletion({
-    prompt,
-    max_tokens: 128,
-    temperature: 0.9,
-    top_p: 0.9,
-    stop: ["\n"],
-  });
-
-  const line = (response.choices[0].text || "").trim();
-  const match = line.match(LINE_RE);
-
   let gapStr, authorName, text;
-  if (match) {
-    [, gapStr, authorName, text] = match;
-    authorName = authorName.trim();
-    text = text.trim();
+
+  if (forcedAuthorName) {
+    // Step 1: let the model decide the timing, ignoring who it would pick.
+    gapStr = await generateGapOnly(prompt);
+    authorName = forcedAuthorName;
+
+    // Step 2: splice in the forced author and resume completion for the
+    // message content only.
+    const forcedPrefix = `[${gapStr}] ${forcedAuthorName}: `;
+    const response = await wllama.createCompletion({
+      prompt: prompt + forcedPrefix,
+      max_tokens: 128,
+      temperature: 0.9,
+      top_p: 0.9,
+      stop: ["\n"],
+    });
+    text = (response.choices[0].text || "").trim();
   } else {
-    gapStr = "+30s";
-    authorName = "unknown";
-    text = line;
+    const response = await wllama.createCompletion({
+      prompt,
+      max_tokens: 128,
+      temperature: 0.9,
+      top_p: 0.9,
+      stop: ["\n"],
+    });
+
+    const line = (response.choices[0].text || "").trim();
+    const match = line.match(LINE_RE);
+    if (match) {
+      [, gapStr, authorName, text] = match;
+      authorName = authorName.trim();
+      text = text.trim();
+    } else {
+      gapStr = "+30s";
+      authorName = "unknown";
+      text = line;
+    }
   }
 
   let authorId = null;

@@ -74,31 +74,6 @@ body {
   padding: 4px 8px;
 }
 
-.persona-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.persona-picker select {
-  background: var(--surface-alt);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px;
-  font-size: 14px;
-  font-family: var(--font-body);
-  text-transform: none;
-  font-weight: 400;
-  min-height: 44px;
-}
-
 .auto-toggle {
   font-size: 14px;
   color: var(--text);
@@ -321,6 +296,36 @@ body {
   padding: 4px 0 4px 52px;
 }
 
+#quick-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+#quick-controls select {
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--font-body);
+  min-height: 40px;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+#quick-controls #continue-btn {
+  flex: 1 1 auto;
+  min-height: 40px;
+  padding: 8px 16px;
+  white-space: nowrap;
+}
+
 #composer {
   padding: 0 20px calc(20px + env(safe-area-inset-bottom)) 20px;
   display: flex;
@@ -424,6 +429,10 @@ select:focus-visible {
 
   #composer {
     padding: 0 12px calc(14px + env(safe-area-inset-bottom)) 12px;
+  }
+
+  #quick-controls {
+    padding: 8px 12px;
   }
 
   #compat-modal {

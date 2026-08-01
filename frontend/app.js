@@ -4,6 +4,7 @@ import { initCompatGuide, checkWebGPUSupport } from "./compat.js";
 const messagesEl = document.getElementById("messages");
 const loadBannerEl = document.getElementById("load-banner");
 const personaSelect = document.getElementById("persona-select");
+const respondAsSelect = document.getElementById("respond-as-select");
 const autoContinueEl = document.getElementById("auto-continue");
 const continueBtn = document.getElementById("continue-btn");
 const textInput = document.getElementById("text-input");
@@ -56,6 +57,11 @@ async function loadAuthors() {
       opt.value = id;
       opt.textContent = info.name;
       personaSelect.appendChild(opt);
+
+      const respondOpt = document.createElement("option");
+      respondOpt.value = info.name;
+      respondOpt.textContent = info.name;
+      respondAsSelect.appendChild(respondOpt);
     });
 }
 
@@ -136,10 +142,11 @@ async function generateNext() {
     text: m.text,
     timestamp: m.timestamp,
   }));
+  const forcedAuthorName = respondAsSelect.value || null;
   devicePillEl.classList.add("busy");
   let result;
   try {
-    result = await generateNextMessage(contextMessages, authors);
+    result = await generateNextMessage(contextMessages, authors, forcedAuthorName);
   } finally {
     devicePillEl.classList.remove("busy");
   }
