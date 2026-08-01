@@ -74,14 +74,15 @@ window.addEventListener("error", (event) => {
   showError(`Unexpected error: ${event.message}`);
 });
 
-// Made-up placeholder conversation shown on first load, just so there's
-// something in the chat before you generate/type anything -- not real
-// messages from anyone.
+// Placeholder conversation shown on first load, just so there's something
+// in the chat before you generate/type anything. Real usernames/avatars
+// (already public, same as the rest of the site), but made-up message
+// content -- not pulled from anyone's actual chat history.
 const DEFAULT_CHAT = [
-  { author_id: "sample-alex", author_name: "Alex", avatar: null, text: "yo is anyone free this weekend", timestamp: "2026-01-01T18:00:00.000Z" },
-  { author_id: "sample-jordan", author_name: "Jordan", avatar: null, text: "depends, what's the plan", timestamp: "2026-01-01T18:02:15.000Z" },
-  { author_id: "sample-sam", author_name: "Sam", avatar: null, text: "movie night? we haven't hung out in forever", timestamp: "2026-01-01T18:05:40.000Z" },
-  { author_id: "sample-alex", author_name: "Alex", avatar: null, text: "bet, i'm down", timestamp: "2026-01-01T18:06:02.000Z" },
+  { author_id: "344563337696247810", author_name: "rubyboat", avatar: "avatars/344563337696247810.png", text: "yo is anyone free this weekend", timestamp: "2026-01-01T18:00:00.000Z" },
+  { author_id: "461306138143621131", author_name: "wiry__", avatar: "avatars/461306138143621131.png", text: "depends, what's the plan", timestamp: "2026-01-01T18:02:15.000Z" },
+  { author_id: "525438791196999681", author_name: "napalmintheair", avatar: "avatars/525438791196999681.png", text: "movie night? we haven't hung out in forever", timestamp: "2026-01-01T18:05:40.000Z" },
+  { author_id: "344563337696247810", author_name: "rubyboat", avatar: "avatars/344563337696247810.png", text: "bet, i'm down", timestamp: "2026-01-01T18:06:02.000Z" },
 ];
 
 let authors = {};
