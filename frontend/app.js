@@ -1,5 +1,5 @@
 import { loadModel, generateNextMessage, isModelReady, MODEL_OPTIONS, getSelectedModelId, setSelectedModelId } from "./model.js";
-import { initCompatGuide, checkWebGPUSupport } from "./compat.js";
+import { initCompatGuide } from "./compat.js";
 
 const messagesEl = document.getElementById("messages");
 const loadBannerEl = document.getElementById("load-banner");
@@ -276,8 +276,8 @@ clearBtn.addEventListener("click", () => {
   renderAll();
   initModel();
 
-  const hasWebGPU = await checkWebGPUSupport();
-  if (!hasWebGPU) {
-    compat.open();
-  }
+  // Always show the compatibility guide on load -- it's useful onboarding
+  // (explains what this even is / that it needs WebGPU) regardless of
+  // whether this specific browser happens to support it.
+  compat.open();
 })();
