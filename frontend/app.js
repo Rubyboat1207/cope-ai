@@ -79,10 +79,13 @@ window.addEventListener("error", (event) => {
 // (already public, same as the rest of the site), but made-up message
 // content -- not pulled from anyone's actual chat history.
 const DEFAULT_CHAT = [
-  { author_id: "344563337696247810", author_name: "rubyboat", avatar: "avatars/344563337696247810.png", text: "yo is anyone free this weekend", timestamp: "2026-01-01T18:00:00.000Z" },
-  { author_id: "461306138143621131", author_name: "wiry__", avatar: "avatars/461306138143621131.png", text: "depends, what's the plan", timestamp: "2026-01-01T18:02:15.000Z" },
-  { author_id: "525438791196999681", author_name: "napalmintheair", avatar: "avatars/525438791196999681.png", text: "movie night? we haven't hung out in forever", timestamp: "2026-01-01T18:05:40.000Z" },
-  { author_id: "344563337696247810", author_name: "rubyboat", avatar: "avatars/344563337696247810.png", text: "bet, i'm down", timestamp: "2026-01-01T18:06:02.000Z" },
+  { author_id: "344563337696247810", author_name: "rubyboat", avatar: "avatars/344563337696247810.png", text: "Been looking at stuff online, going to see them in person tomorrow and decide if I don't like any of them", timestamp: "2026-01-01T18:00:00.000Z" },
+    { author_id: "525438791196999681", author_name: "napalmintheair", avatar: "avatars/525438791196999681.png", text: "What kind? You should get a motorcycle", timestamp: "2026-01-01T18:05:40.000Z" },
+      { author_id: "344563337696247810", author_name: "rubyboat", avatar: "avatars/344563337696247810.png", text: "lol no.", timestamp: "2026-01-01T18:07:00.000Z" },
+      { author_id: "1147657809048129546", author_name: "210percent", avatar: "avatars/1147657809048129546.png", text: "Are you trying to make Rudy even more sexually appealing to yourself", timestamp: "2026-01-01T18:08:00.000Z" },
+      { author_id: "344563337696247810", author_name: "rubyboat", avatar: "avatars/344563337696247810.png", text: "I'm already too attractive, it's not possible", timestamp: "2026-01-01T18:09:00.000Z" },
+      { author_id: "607697122879340554", author_name: "doublesnapps", avatar: "avatars/607697122879340554.png", text: "rudy you are ment for a kei truck or tuk tuk", timestamp: "2026-01-01T18:10:00.000Z" },
+
 ];
 
 let authors = {};
