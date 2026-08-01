@@ -130,73 +130,106 @@ async function generateGapOnly(prompt) {
   return match ? match[1] : "+30s";
 }
 
+const MAX_GENERATION_ATTEMPTS = 3;
+
+// A generation only counts as usable if the format actually came out right
+// and there's real content — an empty message, or free-choice generation
+// that never produced a recognizable "[gap] author: text" line at all
+// (author stayed "unknown"), means the model went off the rails and is
+// worth resampling rather than showing to the user as-is.
+function isValidGeneration(authorName, text, forced) {
+  if (!text || !text.trim()) return false;
+  if (!forced && authorName === "unknown") return false;
+  return true;
+}
+
+async function attemptForced(prompt, forcedAuthorName, onProgress) {
+  onProgress?.({ status: "picking timing...", partialText: "" });
+  const gapStr = await generateGapOnly(prompt);
+
+  // Splice in the forced author and resume completion for the message
+  // content only, streaming so progress is visible live.
+  const forcedPrefix = `[${gapStr}] ${forcedAuthorName}: `;
+  let acc = "";
+  // wllama's resolved promise doesn't carry the text when streaming —
+  // only the onData chunks do — so accumulate it ourselves.
+  await wllama.createCompletion({
+    prompt: prompt + forcedPrefix,
+    max_tokens: 128,
+    temperature: 0.9,
+    top_p: 0.9,
+    repeat_penalty: 1.15,
+    stop: ["\n"],
+    stream: true,
+    onData: (chunk) => {
+      acc += chunk.choices[0].text || "";
+      onProgress?.({ status: `${forcedAuthorName} is typing...`, partialText: firstLine(acc) });
+    },
+  });
+
+  return { gapStr, authorName: forcedAuthorName, text: firstLine(acc).trim() };
+}
+
+async function attemptFree(prompt, onProgress) {
+  let acc = "";
+  onProgress?.({ status: "someone is typing...", partialText: "" });
+  await wllama.createCompletion({
+    prompt,
+    max_tokens: 128,
+    temperature: 0.9,
+    top_p: 0.9,
+    repeat_penalty: 1.15,
+    stop: ["\n"],
+    stream: true,
+    onData: (chunk) => {
+      acc += chunk.choices[0].text || "";
+      const partial = firstLine(acc);
+      const partialMatch = partial.match(/^\[([^\]]+)\]\s*([^:]+):\s*([\s\S]*)$/);
+      if (partialMatch) {
+        onProgress?.({ status: `${partialMatch[2].trim()} is typing...`, partialText: partialMatch[3] });
+      } else {
+        onProgress?.({ status: "someone is typing...", partialText: "" });
+      }
+    },
+  });
+
+  const line = firstLine(acc).trim();
+  const match = line.match(LINE_RE);
+  if (match) {
+    const [, gapStr, authorNameRaw, textRaw] = match;
+    return { gapStr, authorName: authorNameRaw.trim(), text: textRaw.trim() };
+  }
+  return { gapStr: "+30s", authorName: "unknown", text: line };
+}
+
 export async function generateNextMessage(messages, authors, forcedAuthorName = null, onProgress = null) {
   if (!wllama) throw new Error("model not loaded yet");
 
   const prompt = buildPrompt(messages);
-  let gapStr, authorName, text;
+  let result = null;
 
-  if (forcedAuthorName) {
-    // Step 1: let the model decide the timing, ignoring who it would pick.
-    onProgress?.({ status: "picking timing...", partialText: "" });
-    gapStr = await generateGapOnly(prompt);
-    authorName = forcedAuthorName;
+  for (let attempt = 1; attempt <= MAX_GENERATION_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      onProgress?.({ status: `that came out blank/garbled, regenerating (attempt ${attempt}/${MAX_GENERATION_ATTEMPTS})...`, partialText: "" });
+    }
 
-    // Step 2: splice in the forced author and resume completion for the
-    // message content only, streaming so progress is visible live.
-    const forcedPrefix = `[${gapStr}] ${forcedAuthorName}: `;
-    let acc = "";
-    // wllama's resolved promise doesn't carry the text when streaming —
-    // only the onData chunks do — so accumulate it ourselves.
-    await wllama.createCompletion({
-      prompt: prompt + forcedPrefix,
-      max_tokens: 128,
-      temperature: 0.9,
-      top_p: 0.9,
-      repeat_penalty: 1.15,
-      stop: ["\n"],
-      stream: true,
-      onData: (chunk) => {
-        acc += chunk.choices[0].text || "";
-        onProgress?.({ status: `${forcedAuthorName} is typing...`, partialText: firstLine(acc) });
-      },
-    });
-    text = firstLine(acc).trim();
-  } else {
-    let acc = "";
-    onProgress?.({ status: "someone is typing...", partialText: "" });
-    await wllama.createCompletion({
-      prompt,
-      max_tokens: 128,
-      temperature: 0.9,
-      top_p: 0.9,
-      repeat_penalty: 1.15,
-      stop: ["\n"],
-      stream: true,
-      onData: (chunk) => {
-        acc += chunk.choices[0].text || "";
-        const partial = firstLine(acc);
-        const partialMatch = partial.match(/^\[([^\]]+)\]\s*([^:]+):\s*([\s\S]*)$/);
-        if (partialMatch) {
-          onProgress?.({ status: `${partialMatch[2].trim()} is typing...`, partialText: partialMatch[3] });
-        } else {
-          onProgress?.({ status: "someone is typing...", partialText: "" });
-        }
-      },
-    });
+    const candidate = forcedAuthorName
+      ? await attemptForced(prompt, forcedAuthorName, onProgress)
+      : await attemptFree(prompt, onProgress);
 
-    const line = firstLine(acc).trim();
-    const match = line.match(LINE_RE);
-    if (match) {
-      [, gapStr, authorName, text] = match;
-      authorName = authorName.trim();
-      text = text.trim();
-    } else {
-      gapStr = "+30s";
-      authorName = "unknown";
-      text = line;
+    if (isValidGeneration(candidate.authorName, candidate.text, !!forcedAuthorName)) {
+      result = candidate;
+      break;
     }
   }
+
+  if (!result) {
+    throw new Error(
+      `Model produced an empty or malformed message ${MAX_GENERATION_ATTEMPTS} times in a row — try generating again.`
+    );
+  }
+
+  const { gapStr, authorName, text } = result;
 
   let authorId = null;
   let avatar = null;
