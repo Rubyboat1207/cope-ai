@@ -2,25 +2,38 @@
 
 Finetunes an LLM on the user's own Discord group chat ("cope") to predict the
 next message — who sends it, how long after the previous one, and what it
-says — then serves that model as a browser-based chat simulator that runs
-**entirely client-side** via WebGPU. No inference server, no ongoing hosting
-cost.
+says — then serves that model as a **fully static** browser-based chat
+simulator: no backend, no inference server, no ongoing hosting cost. The
+model runs client-side via WebGPU (`wllama`), fetched directly from a public
+Hugging Face model repo (https://huggingface.co/Rubyboat/cope-ai-v3). The
+whole `frontend/` directory can be dropped onto GitHub Pages (or any static
+host) as-is.
+
+Public repo: https://github.com/Rubyboat1207/cope-ai — see **Repo & privacy**
+below for exactly what is and isn't in it.
 
 ## Layout
 
 ```
 pipeline/     one-time data-prep + training/merge scripts (below)
-frontend/     the chat UI (HTML/CSS/JS), served by server.py in dev
+frontend/     the entire static site — HTML/CSS/JS + authors.json + avatars/.
+              deployable as-is (GitHub Pages, any static host, or just open
+              index.html locally / `python -m http.server` from inside it).
 llama.cpp/    vendored checkout, used only for convert_hf_to_gguf.py + llama-quantize/llama-server
 logs/         all *.log output (gitignored)
 models/       base model + merged models (gitignored, large)
 lora_out/     LoRA training checkpoints (gitignored, large)
 gguf_out/     converted/quantized GGUF files (gitignored, large)
-avatars/, messages.jsonl, finetune_dataset.jsonl, authors.json, me.json
-              your group's actual data (gitignored — private, don't publish)
+messages.jsonl, finetune_dataset.jsonl, me.json
+              your group's raw chat data (gitignored — private, never published)
 dashboard.py / dashboard.sh   control-panel TUI covering everything below except step 1
 monitor_tui.py / monitor.sh   lighter-weight standalone training monitor (subset of dashboard.py's Dashboard tab)
 ```
+
+There is intentionally no `server.py` — an earlier iteration had a FastAPI
+dev server, but once inference moved fully client-side (via `wllama`) and
+the date-range history-browsing feature was removed, there was nothing left
+that a static file server couldn't do, so it was deleted.
 
 All `pipeline/` scripts use plain relative paths (`Path("messages.jsonl")`
 etc.), not `__file__`-relative ones — they must be run with the repo root as
@@ -35,10 +48,12 @@ them this way (`cwd=ROOT`).
    history of a channel into `messages.jsonl`. Resumable (skips
    already-downloaded IDs), supports `--limit N` for test runs.
 2. **`pipeline/fetch_avatars.py`** — logs in again, downloads every unique
-   author's profile picture into `avatars/{author_id}.png`, and writes
-   `me.json` (the logged-in user's own id/name).
-3. **`pipeline/build_authors.py`** — derives `authors.json` (id →
-   `{name, avatar}`) from `messages.jsonl` + `avatars/`. Rerun after
+   author's profile picture into `frontend/avatars/{author_id}.png` (this
+   lives under `frontend/` because it's a static site asset, not private
+   data — see **Repo & privacy**), and writes `me.json` (the logged-in
+   user's own id/name).
+3. **`pipeline/build_authors.py`** — derives `frontend/authors.json` (id →
+   `{name, avatar}`) from `messages.jsonl` + `frontend/avatars/`. Rerun after
    re-downloading history or fetching new avatars.
 4. **`pipeline/build_dataset.py`** — turns `messages.jsonl` into
    sliding-window next-message-prediction training examples
@@ -61,9 +76,8 @@ them this way (`cwd=ROOT`).
    python llama.cpp/convert_hf_to_gguf.py models/merged-X --outfile gguf_out/X-f16.gguf --outtype f16
    ./llama.cpp/build/bin/llama-quantize gguf_out/X-f16.gguf gguf_out/X-q4_k_m.gguf Q4_K_M
    ```
-8. **`server.py`** (dev only) + **`frontend/`** — the chat UI. In
-   production the frontend fetches the GGUF directly from a public Hugging
-   Face model repo and needs no backend at all (see **Deployment**).
+8. **`frontend/`** — the chat UI, already deployed and pointed at the live
+   Hugging Face model. No backend step needed (see **Deployment**).
 
 ## Format
 
@@ -79,9 +93,8 @@ message per line:
 
 `[gap]` is bucketed (`+Ns` / `+Nm` / `+Nh` / `+Nd`), computed from real
 consecutive-message timestamps. The model predicts the line after
-`<|next|>` — author, gap, and text jointly. `server.py`'s `LINE_RE` and
-`frontend/model.js`'s `LINE_RE` both parse this; keep them in sync if the
-format changes.
+`<|next|>` — author, gap, and text jointly. Parsed client-side by
+`frontend/model.js`'s `LINE_RE` — keep it in sync if the format changes.
 
 ## Hardware / environment gotchas
 
@@ -101,22 +114,24 @@ only **14GB system RAM** — both matter a lot:
 - **`torch.cuda.device_count()` reports a bogus extra device** — ROCm
   exposes the CPU/iGPU as an HSA agent alongside the real GPUs, which makes
   HF `Trainer` try to wrap the model in `DataParallel` across all of them
-  and crash on NCCL. `train_lora.py` and `server.py` both hard-set
+  and crash on NCCL. `pipeline/train_lora.py` hard-sets
   `HIP_VISIBLE_DEVICES` / `CUDA_VISIBLE_DEVICES` before importing torch to
   work around this — don't remove those lines.
-- **System RAM is the real bottleneck**, not VRAM. Loading a second 3B model
-  (e.g. starting the chat server while training is running) pushes the
-  system into heavy swap and can take several minutes just to `.to(cuda)`.
-  This is expected, not a hang — check `free -h` before assuming something
-  is broken.
+- **System RAM is the real bottleneck**, not VRAM. Loading a 3B model for
+  merging (`pipeline/merge_lora.py`) while training is also running pushes
+  the system into heavy swap and can take several minutes just to
+  `.to(cuda)`. This is expected, not a hang — check `free -h` before
+  assuming something is broken.
 - **Root partition (`/`) is chronically near-full** (~23GB free); everything
   large (models, datasets, venv, pip cache) lives under `/mnt/2tb_ssd`
   instead. `PIP_CACHE_DIR` is pinned there via `venv/bin/activate`.
-- **Discord snowflake IDs exceed JS's safe-integer range.** Any endpoint
-  returning `author_id`/message `id` as a JSON *number* gets silently
-  corrupted by the browser's `JSON.parse`. `server.py` stringifies both
-  before returning — if you add a new endpoint touching these fields, do
-  the same.
+- **Discord snowflake IDs exceed JS's safe-integer range** — this bit us
+  when the old dev server sent `author_id`/message `id` as JSON *numbers*,
+  which the browser's `JSON.parse` silently corrupted. Not an active
+  concern anymore (the static site only ever handles these as object keys/
+  strings, e.g. in `authors.json`), but if you ever add anything that
+  serializes a raw snowflake as a JSON number for the frontend to consume,
+  stringify it first.
 
 ## Training
 
@@ -163,10 +178,11 @@ Guided/Quantize-tab output naming: `gguf_out/{merged_model_name}-{f16,or,quant_l
 derived from the merged model directory's name with `merged-` stripped. The
 very first GGUF export (done manually, before the dashboard existed) used a
 different fixed naming scheme — `gguf_out/model-f16.gguf` /
-`gguf_out/model-q4_k_m.gguf` — and that's still what `frontend/model.js`'s
-dev-mode `MODEL_URL` points at. Don't delete/rename those two files without
-also updating `MODEL_URL`, and don't be surprised the naming isn't uniform
-across old vs. dashboard-generated files.
+`gguf_out/model-q4_k_m.gguf` — and the latter is the one actually uploaded
+to Hugging Face and referenced by `frontend/model.js`'s `MODEL_URL` right
+now. If you quantize a newer checkpoint and want to ship it, upload the new
+file to the HF repo and update `MODEL_URL` (see **Deployment**) — don't
+just delete/overwrite the old local file without doing both.
 
 ## Monitoring
 
@@ -181,53 +197,77 @@ manually-redirected `train_lora.py` (`... > logs/train.log 2>&1`); training
 started from the dashboard's Train tab streams straight into its own log
 widget instead and never touches `logs/train.log`.
 
-## The chat app (`server.py` + `frontend/`)
+## The chat app (`frontend/`, fully static)
 
-- **Dev mode**: `server.py` runs a FastAPI backend serving `authors.json`,
-  date-range-filtered history from `messages.jsonl`, avatars, the static
-  frontend, and (dev-only) the GGUF file itself at `/models/...`. It also
-  loads the Python model server-side for a legacy `/api/generate` endpoint —
-  the frontend no longer calls this; it's vestigial and can be removed once
-  the client-side path is fully trusted.
-- **Real inference path**: `frontend/model.js` loads `wllama` from a CDN
-  (jsdelivr — **use the direct `esm/index.js` and `esm/wasm/wllama.wasm`
-  paths, not the `+esm` shortcut or the bare `wasm/wllama.wasm` path from
-  wllama's own README** — both 404/503 for this package version; verified
-  working paths are already wired up in `model.js`), detects WebGPU via
+- **Inference**: `frontend/model.js` loads `wllama` from a CDN (jsdelivr —
+  **use the direct `esm/index.js` and `esm/wasm/wllama.wasm` paths, not the
+  `+esm` shortcut or the bare `wasm/wllama.wasm` path from wllama's own
+  README** — both 404/503 for this package version; verified working paths
+  are already wired up in `model.js`), detects WebGPU via
   `isSupportWebGPU()`, and runs `createCompletion()` (raw completion, *not*
   `createChatCompletion` — the model was trained on a custom flat format,
-  not a chat template) entirely in-browser.
+  not a chat template) entirely in-browser. `MODEL_URL` points at the live
+  HF resolve URL — there is no local/dev fallback path anymore, it's the
+  same URL used everywhere.
 - `wllama` v3+ removed the `tokenize`/`detokenize` API, so there's no exact
   client-side token counting. Context trimming in `model.js` is a
   message-count heuristic (`MAX_CONTEXT_MESSAGES = 40`), not an exact
   token-budget match to training — good enough in practice, not identical
   to `build_dataset.py`'s trimming.
-- Frontend starts with an **empty chat** by default — no auto-loaded recent
-  history. The user picks a date range in the sidebar to seed the visible
-  window from `messages.jsonl`.
-- The "Chat as" dropdown lets you send a message under *any* known author's
-  name/avatar, not just the account owner's.
+- Frontend starts with an **empty chat** — you seed it by typing a message
+  as one of the personas in the "Chat as" dropdown (which can be *any*
+  known author, not just the account owner), then generating from there.
+  There used to be a date-range history browser backed by a dev server;
+  it was removed along with `server.py`.
+- A **browser/device compatibility guide** (`frontend/compat.js`) detects
+  OS + browser via `navigator.userAgent` and shows per-platform WebGPU
+  setup instructions (Windows/macOS/Linux/Android/iOS) — accessible via the
+  sidebar link, and auto-opens if `navigator.gpu.requestAdapter()` fails.
 - The device-status pill (`GPU · LOCAL` / `CPU · LOCAL`) in the top bar
   reflects real `wllama` state (loading %, ready, generating) — it's the
   whole point of this build (zero server cost), keep it honest if you touch
   the loading code.
 
-## Deployment (once training is "good enough")
+## Deployment
+
+Already done — this is the reference for redoing it (e.g. after further
+training):
 
 1. `pipeline/merge_lora.py` the chosen checkpoint, convert + quantize to GGUF
-   (or just use the dashboard's **Guided** tab for this whole step)
-   (`q4_k_m` recommended — ~1.8GB for the 3B model, good quality/size
+   (or just use the dashboard's **Guided** tab for this whole step) —
+   `q4_k_m` is what's live (~1.8GB for the 3B model, good quality/size
    tradeoff; regular `git`/GitHub rejects files this large outright, and
    Git LFS's free tier is too small for repeated downloads).
-2. Upload the GGUF to a **public Hugging Face Hub model repo** (free,
-   unlimited, CDN-backed, CORS-enabled — the standard place to host GGUF
-   files for browser inference).
-3. Update `MODEL_URL` in `frontend/model.js` from the local `/models/...`
-   dev path to the HF `resolve/main/...` URL.
-4. Host `frontend/` (+ `authors.json`, `avatars/`, `messages.jsonl`) as a
-   static site (GitHub Pages is free and sufficient) — `server.py` is not
-   needed in production at all once step 3 is done, since every remaining
-   endpoint it serves is static data.
+2. Upload the GGUF to the **public Hugging Face model repo**
+   (https://huggingface.co/Rubyboat/cope-ai-v3), e.g.:
+   ```
+   hf upload Rubyboat/cope-ai-v3 gguf_out/<file>.gguf <file>.gguf
+   ```
+3. Update `MODEL_URL` in `frontend/model.js` to the new file's
+   `resolve/main/...` URL if the filename changed.
+4. `frontend/` is the entire deployable site — point GitHub Pages (or any
+   static host) at it directly. No backend, no build step.
+
+## Repo & privacy
+
+Public repo: https://github.com/Rubyboat1207/cope-ai. What's in it vs. not,
+and why:
+
+- **Published (intentionally, with explicit confirmation)**: all code,
+  `frontend/authors.json` and `frontend/avatars/*.png` — real Discord
+  usernames and profile pictures of the group's members. These are static
+  site assets the deployed chat app needs to render at all, and publishing
+  them was a deliberate choice, not an oversight.
+- **Never published**: `messages.jsonl` / `finetune_dataset.jsonl` (the
+  full raw chat history/training data) and `me.json` — these stay local
+  only, excluded via `.gitignore`, along with `.env` (the Discord token),
+  `models/`/`lora_out/`/`gguf_out/`/`llama.cpp/` (large, regenerable), and
+  `logs/`.
+- If you ever change this tradeoff (e.g. decide the avatars/usernames
+  shouldn't be public after all), you'd need to both remove them from
+  `frontend/` **and** scrub git history (`git filter-repo` or similar) —
+  deleting the files in a new commit alone leaves them recoverable from
+  earlier commits in a public repo.
 
 ## Known rough edges
 
