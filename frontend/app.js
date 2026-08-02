@@ -1,4 +1,4 @@
-import { loadModel, generateNextMessage, isModelReady, MODEL_OPTIONS, getSelectedModelId, setSelectedModelId } from "./model.js";
+import { loadModel, loadModelFromFile, generateNextMessage, isModelReady, MODEL_OPTIONS, getSelectedModelId, setSelectedModelId } from "./model.js";
 import { initCompatGuide } from "./compat.js";
 
 const messagesEl = document.getElementById("messages");
@@ -33,6 +33,8 @@ modelSelect.addEventListener("change", () => {
   location.reload();
 });
 
+const localModelInput = document.getElementById("local-model-input");
+
 const sidebarEl = document.getElementById("sidebar");
 const sidebarScrimEl = document.getElementById("sidebar-scrim");
 const hamburgerBtn = document.getElementById("hamburger-btn");
@@ -66,6 +68,31 @@ function hideError() {
   errorBannerEl.classList.add("hidden");
 }
 errorBannerEl.addEventListener("click", hideError);
+
+localModelInput.addEventListener("change", async () => {
+  const files = localModelInput.files;
+  if (!files || files.length === 0) return;
+
+  hideError();
+  loadBannerEl.textContent = `Loading ${files[0].name} from disk...`;
+  loadBannerEl.classList.remove("hidden", "error");
+  setDevicePill("connecting");
+
+  try {
+    const usedGpu = await loadModelFromFile(files, ({ stage, pct }) => {
+      loadBannerEl.textContent = `${stage}: ${pct}%`;
+      setDevicePill(`${stage.includes("GPU") ? "GPU" : "CPU"} · ${pct}%`);
+    });
+    loadBannerEl.textContent = `Model ready — loaded ${files[0].name} from disk.`;
+    setDevicePill(`${usedGpu ? "GPU" : "CPU"} · local file`);
+    setTimeout(() => loadBannerEl.classList.add("hidden"), 4000);
+  } catch (e) {
+    loadBannerEl.textContent = `Failed to load ${files[0].name}: ${e.message}`;
+    loadBannerEl.classList.add("error");
+    setDevicePill("offline", { offline: true });
+    showError(`Failed to load local model file: ${e.message}`);
+  }
+});
 
 window.addEventListener("unhandledrejection", (event) => {
   showError(`Unexpected error: ${event.reason?.message || event.reason}`);

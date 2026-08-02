@@ -92,6 +92,52 @@ def checkpoint_list():
     )
 
 
+def is_training_running() -> bool:
+    try:
+        out = subprocess.run(["pgrep", "-f", "train_lora.py"], capture_output=True, text=True).stdout
+        return bool(out.strip())
+    except Exception:
+        return False
+
+
+def checkpoint_progress(total_hint: int | None):
+    """Fallback progress estimate derived purely from checkpoint file steps
+    and mtimes. Needed because train.log only gets written when training is
+    started manually with output redirected there — training launched from
+    the dashboard's Train tab streams straight into its own log widget and
+    never touches train.log, which otherwise leaves monitor_tui.py stuck
+    showing whatever was last in that file."""
+    if not LORA_DIR.exists():
+        return None
+    ckpts = sorted(
+        LORA_DIR.glob("checkpoint-*"),
+        key=lambda p: int(p.name.split("-")[1]),
+    )
+    if not ckpts:
+        return None
+
+    latest = ckpts[-1]
+    latest_step = int(latest.name.split("-")[1])
+    latest_mtime = latest.stat().st_mtime
+
+    s_per_it = None
+    if len(ckpts) >= 2:
+        prev = ckpts[-2]
+        prev_step = int(prev.name.split("-")[1])
+        prev_mtime = prev.stat().st_mtime
+        step_delta = latest_step - prev_step
+        time_delta = latest_mtime - prev_mtime
+        if step_delta > 0 and time_delta > 0:
+            s_per_it = time_delta / step_delta
+
+    return {
+        "step": latest_step,
+        "total": total_hint,
+        "s_per_it": s_per_it,
+        "checkpoint_age": time.time() - latest_mtime,
+    }
+
+
 def pct_color(pct: float) -> str:
     if pct < 60:
         return "green"
@@ -104,9 +150,45 @@ def build_dashboard():
     text = read_tail(TRAIN_LOG)
     progress = latest_progress(text)
     losses = latest_losses(text)
+    running = is_training_running()
+
+    # train.log only gets written when training is started manually with
+    # output redirected there. If it's missing, or clearly behind the
+    # newest checkpoint on disk (training running elsewhere, e.g. via the
+    # dashboard's Train tab, has since moved past it), fall back to
+    # estimating progress from checkpoint file steps/mtimes instead of
+    # showing stale/absent data forever.
+    ckpt_fallback = checkpoint_progress(progress["total"] if progress else None)
+    log_is_stale = progress and ckpt_fallback and ckpt_fallback["step"] > progress["step"]
+    use_fallback = running and (progress is None or log_is_stale) and ckpt_fallback
 
     progress_group = []
-    if progress:
+    if use_fallback:
+        step = ckpt_fallback["step"]
+        total = ckpt_fallback["total"]
+        note = Text(
+            "(estimated from checkpoint files — train.log isn't being written by this run, "
+            "e.g. it was started from the dashboard's Train tab)",
+            style="dim italic",
+        )
+        if total:
+            pct = int(step / total * 100)
+            bar = ProgressBar(total=total, completed=step, width=50, complete_style="bright_magenta", finished_style="bright_green")
+            header = Text(f"  ~{pct}%  ", style="bold bright_magenta")
+            header.append(f"(~{step:,} / {total:,} steps)", style="dim")
+            progress_group = [header, bar, note]
+        else:
+            progress_group = [Text(f"  step ~{step:,} (checkpoint-{step})", style="bold bright_magenta"), note]
+
+        if ckpt_fallback["s_per_it"]:
+            info = Table.grid(padding=(0, 2))
+            info.add_row(Text("Speed", style="bold cyan"), Text(f"~{ckpt_fallback['s_per_it']:.2f}s/step", style="white"))
+            if total:
+                eta_seconds = (total - step) * ckpt_fallback["s_per_it"]
+                info.add_row(Text("ETA", style="bold cyan"), Text(f"~{timedelta(seconds=int(eta_seconds))}", style="bright_yellow"))
+            progress_group.append(Text(""))
+            progress_group.append(info)
+    elif progress:
         step, total = progress["step"], progress["total"]
         pct = progress["pct"]
 
@@ -122,8 +204,13 @@ def build_dashboard():
         info.add_row(Text("Remaining", style="bold cyan"), Text(f"{progress['remaining']}  (~{eta})", style="bright_yellow"))
 
         progress_group = [header, bar, Text(""), info]
+    elif running:
+        progress_group = [Text("training process is running, but no progress data yet (starting up?)", style="dim italic")]
     else:
-        progress_group = [Text("no progress data yet — training may still be starting up", style="dim italic")]
+        progress_group = [Text("no training process running", style="dim italic")]
+
+    status_line = Text("● running", style="bold bright_green") if running else Text("○ not running", style="dim")
+    progress_group = [status_line, Text("")] + progress_group
 
     progress_panel = Panel(
         Group(*progress_group),
@@ -131,7 +218,8 @@ def build_dashboard():
         border_style="bright_magenta",
     )
 
-    loss_table = Table(title="[bold]Recent loss[/bold]", expand=True, border_style="cyan", header_style="bold cyan")
+    loss_title = "[bold]Recent loss[/bold]" + (" [dim](from train.log — may be stale, see above)[/dim]" if use_fallback else "")
+    loss_table = Table(title=loss_title, expand=True, border_style="cyan", header_style="bold cyan")
     loss_table.add_column("Epoch")
     loss_table.add_column("Loss")
     if losses:

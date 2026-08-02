@@ -41,7 +41,13 @@ const LINE_RE = /^\[([^\]]+)\]\s*([^:]+):\s*(.*)$/;
 const MAX_CONTEXT_MESSAGES = 40;
 
 let wllama = null;
+let modelReady = false;
 let loadingPromise = null;
+// Guards against a slow in-flight load (e.g. the initial big URL download)
+// finishing *after* a newer load (e.g. the user picking a local file while
+// that download was still running) and stomping its result. Each load
+// captures the counter at start and only commits if still current.
+let loadGeneration = 0;
 
 function formatGap(seconds) {
   seconds = Math.max(0, Math.round(seconds));
@@ -63,7 +69,7 @@ export function gapStringToSeconds(gap) {
 }
 
 export function isModelReady() {
-  return wllama !== null;
+  return modelReady;
 }
 
 // wllama's "stop" option only truncates the final resolved response, not
@@ -77,8 +83,10 @@ function firstLine(s) {
 }
 
 export async function loadModel(onProgress) {
-  if (wllama) return;
+  if (modelReady) return;
   if (loadingPromise) return loadingPromise;
+
+  const myGeneration = ++loadGeneration;
 
   loadingPromise = (async () => {
     const instance = new Wllama({ default: WLLAMA_WASM_URL });
@@ -95,10 +103,46 @@ export async function loadModel(onProgress) {
       },
     });
 
+    if (myGeneration !== loadGeneration) {
+      // superseded by a newer load (e.g. local-file picker) while this
+      // download was in flight — discard this result instead of stomping.
+      await instance.exit();
+      return;
+    }
     wllama = instance;
+    modelReady = true;
   })();
 
   return loadingPromise;
+}
+
+// Loads a .gguf file the user picked from their own computer (e.g. one
+// they just quantized locally, before uploading it anywhere) instead of
+// fetching from a URL. Reuses the same Wllama instance across swaps —
+// wllama.exit() cleanly unloads a model so the instance can load another.
+export async function loadModelFromFile(fileList, onProgress) {
+  const myGeneration = ++loadGeneration;
+  loadingPromise = null;
+  modelReady = false;
+
+  if (!wllama) {
+    wllama = new Wllama({ default: WLLAMA_WASM_URL });
+  } else {
+    onProgress?.({ stage: "unloading previous model", pct: 0 });
+    await wllama.exit();
+  }
+
+  const useGpu = wllama.isSupportWebGPU ? wllama.isSupportWebGPU() : false;
+  onProgress?.({ stage: `loading ${fileList[0]?.name || "local file"}`, pct: 50 });
+
+  await wllama.loadModel(Array.from(fileList), {
+    n_gpu_layers: useGpu ? 99999 : 0,
+    n_ctx: 1024,
+  });
+
+  if (myGeneration !== loadGeneration) return false; // superseded meanwhile
+  modelReady = true;
+  return useGpu;
 }
 
 function buildPrompt(messages) {
@@ -203,7 +247,7 @@ async function attemptFree(prompt, onProgress) {
 }
 
 export async function generateNextMessage(messages, authors, forcedAuthorName = null, onProgress = null) {
-  if (!wllama) throw new Error("model not loaded yet");
+  if (!modelReady) throw new Error("model not loaded yet");
 
   const prompt = buildPrompt(messages);
   let result = null;

@@ -247,15 +247,25 @@ class TrainTab(Vertical):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        while True:
-            line = await self.process.stdout.readline()
-            if not line:
-                break
-            text = line.decode("utf-8", errors="ignore").rstrip()
-            for part in text.split("\r"):
-                part = part.strip()
-                if part:
-                    log.write(part)
+        # Also tee raw output to logs/train.log so monitor_tui.py's normal
+        # (non-fallback) log-parsing path works too, not just the dashboard's
+        # own view — otherwise training started from here is invisible to
+        # anyone just running ./monitor.sh.
+        TRAIN_LOG.parent.mkdir(exist_ok=True)
+        with TRAIN_LOG.open("ab") as log_file:
+            log_file.write(f"\n=== dashboard: starting train_lora.py (pid {self.process.pid}) ===\n".encode())
+            log_file.flush()
+            while True:
+                line = await self.process.stdout.readline()
+                if not line:
+                    break
+                log_file.write(line)
+                log_file.flush()
+                text = line.decode("utf-8", errors="ignore").rstrip()
+                for part in text.split("\r"):
+                    part = part.strip()
+                    if part:
+                        log.write(part)
         code = await self.process.wait()
         log.write(f"[process exited, code {code}]")
         self.process = None
