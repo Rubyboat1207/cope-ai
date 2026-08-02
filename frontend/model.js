@@ -14,8 +14,8 @@ const HF_BASE = "https://huggingface.co/Rubyboat/cope-ai-v3/resolve/main";
 // requiring a code change + redeploy every time.
 export const MODEL_OPTIONS = [
   { id: "q2_k", label: "Q2_K — last resort only, barely coherent (~1.2GB)", url: `${HF_BASE}/model-q2_k.gguf` },
-  { id: "q3_k_m", label: "Q3_K_M — small (~1.6GB), default", url: `${HF_BASE}/model-q3_k_m.gguf` },
-  { id: "q4_k_m", label: "Q4_K_M — better quality (~1.9GB), desktop recommended", url: `${HF_BASE}/model-q4_k_m.gguf` },
+  { id: "q3_k_m", label: "Q3_K_M — small (~1.6GB), default", url: `${HF_BASE}/checkpoint-13138-q3_k_m.gguf` },
+  { id: "q4_k_m", label: "Q4_K_M — better quality (~1.9GB), desktop recommended", url: `${HF_BASE}/checkpoint-13138-q4_k_m.gguf` },
 ];
 const DEFAULT_MODEL_ID = "q3_k_m";
 const MODEL_CHOICE_KEY = "cope-ai-model-choice";

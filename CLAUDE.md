@@ -177,12 +177,19 @@ relies on for its "Stop (graceful)" button.
 Guided/Quantize-tab output naming: `gguf_out/{merged_model_name}-{f16,or,quant_level}.gguf`,
 derived from the merged model directory's name with `merged-` stripped. The
 very first GGUF export (done manually, before the dashboard existed) used a
-different fixed naming scheme — `gguf_out/model-f16.gguf` /
-`gguf_out/model-q4_k_m.gguf` — and the latter is the one actually uploaded
-to Hugging Face and referenced by `frontend/model.js`'s `MODEL_URL` right
-now. If you quantize a newer checkpoint and want to ship it, upload the new
-file to the HF repo and update `MODEL_URL` (see **Deployment**) — don't
-just delete/overwrite the old local file without doing both.
+different fixed naming scheme — `gguf_out/model-f16.gguf` / `model-q4_k_m.gguf`
+/ `model-q3_k_m.gguf` / `model-q2_k.gguf` — those are all still on the HF
+repo (Q2_K still is, since it wasn't worth re-quantizing at that level for
+the next checkpoint), but Q3_K_M/Q4_K_M have since been superseded by
+newer, dashboard-generated ones from later checkpoints
+(`checkpoint-13138-q3_k_m.gguf` / `checkpoint-13138-q4_k_m.gguf` as of this
+writing). `frontend/model.js`'s `MODEL_OPTIONS` array is the source of
+truth for which file each tier currently points at — when you quantize a
+newer checkpoint and want to ship it, upload the new file to the HF repo
+and update the relevant entry there (see **Deployment**). Old superseded
+files are generally left on the HF repo rather than deleted (harmless,
+and avoids breaking anyone with a cached reference), but nothing in the
+site points at them anymore once you've updated `MODEL_OPTIONS`.
 
 ## Monitoring
 
